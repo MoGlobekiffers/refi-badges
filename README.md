@@ -75,6 +75,21 @@ pnpm dev
 # or
 bun dev
 ```
+## 🗺️ Roadmap (Proof of Ship)
+
+- **M1** — Onboarding + check-ins (Mon→Sun)  
+- **M2** — Badge image generation + storage  
+- **M3** — Public pages `/u/{handle}` + `/badge/{id}`  
+- **M4** — Sharing polish + 60–90s demo video  
+- **V2** — Celo NFT badge (stretch)
+
+## 🗺️ Feuille de route (Proof of Ship)
+
+- **M1** — Onboarding + pointages (Lun→Dim)  
+- **M2** — Génération d’image de badge + stockage  
+- **M3** — Pages publiques `/u/{handle}` + `/badge/{id}`  
+- **M4** — Partage amélioré + vidéo démo 60–90 s  
+- **V2** — Badge NFT Celo (objectif étendu)
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 

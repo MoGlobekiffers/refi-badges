@@ -1,3 +1,65 @@
+# ReFi Badges
+
+> **FR** — Mini-app mobile-first qui transforme des habitudes pro-climat en **badges visuels hebdomadaires**.  
+> **EN** — Mobile-first mini-app turning pro-climate habits into **weekly visual badges**.
+
+---
+
+## 🌱 Overview / Aperçu
+- **V1 (MVP)**: Off-chain web app (Next.js + Tailwind). Users define one habit + weekly target (e.g., 3/7), check off days, and unlock a **shareable image badge**.  
+- **V2 (Celo)**: Badges become **NFT souvenirs on Celo** (low fees, mobile-friendly) for verifiable progress, reputation, and interoperability.
+
+Aligned with **Celo** values: accessible, mobile-first, ReFi / sustainability.
+
+---
+
+## 🔗 Live / Liens
+- **App**: https://refi-badges-h8fpyfatc-globekiffers-projects.vercel.app
+- **Repo**: https://github.com/MoGlobekiffers/refi-badges
+
+---
+
+## 🧰 Tech
+Next.js (App Router) · TypeScript · Tailwind CSS  
+Planned: Supabase (Auth/DB/Storage) · Celo (ERC-721 NFT) for V2
+
+---
+
+## 🚀 Quickstart
+```bash
+npm i
+npm run dev   # -> http://localhost:3000
+# ReFi Badges
+
+> **FR** — Mini-app mobile-first qui transforme des habitudes pro-climat en **badges visuels hebdomadaires**.  
+> **EN** — Mobile-first mini-app turning pro-climate habits into **weekly visual badges**.
+
+---
+
+## 🌱 Overview / Aperçu
+- **V1 (MVP)**: Off-chain web app (Next.js + Tailwind). Users define one habit + weekly target (e.g., 3/7), check off days, and unlock a **shareable image badge**.  
+- **V2 (Celo)**: Badges become **NFT souvenirs on Celo** (low fees, mobile-first) for verifiable progress and reputation.
+
+Aligned with **Celo** values: accessible, mobile-first, ReFi / sustainability.
+
+---
+
+## 🔗 Live / Liens
+- **App**: https://refi-badges-h8fpyfatc-globekiffers-projects.vercel.app  
+- **Repo**: https://github.com/MoGlobekiffers/refi-badges
+
+---
+
+## 🧰 Tech
+Next.js (App Router) · TypeScript · Tailwind CSS  
+Planned: Supabase (Auth/DB/Storage) · Celo (ERC-721 NFT) for V2
+
+---
+
+## 🚀 Quickstart
+```bash
+npm i
+npm run dev   # -> http://localhost:3000
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started

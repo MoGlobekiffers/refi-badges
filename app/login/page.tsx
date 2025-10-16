@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
+import { getAppOrigin } from '@/lib/safeOrigin';
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -14,7 +15,7 @@ export default function Login() {
       return;
     }
 
-    const redirectTo = "http://localhost:3000/auth/callback";
+const redirectTo = `${getAppOrigin()}/auth/callback`;
 
 
     const { error } = await supabase.auth.signInWithOtp({

@@ -46,9 +46,11 @@ export default function Callback() {
         window.history.replaceState({}, "", "/app");
         setMsg("Signed in! Redirecting to /app…");
         setTimeout(() => (window.location.href = "/app"), 600);
-      } catch (err: any) {
-        setMsg(`Auth error: ${err?.message ?? String(err)}`);
-      }
+      } catch (err: unknown) {
+  const message = err instanceof Error ? err.message : String(err);
+  setMsg(`Auth error: ${message}`);
+}
+
     }
     run();
   }, []);

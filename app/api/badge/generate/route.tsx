@@ -11,7 +11,7 @@ const MAX_REQ   = Number(process.env.RATE_MAX_REQ ?? 10);
 type Stamp = { t: number; n: number };
 
 declare global {
-  // eslint-disable-next-line no-var
+  // 
   var __rl: Map<string, Stamp> | undefined;
 }
 const RL: Map<string, Stamp> = globalThis.__rl ?? new Map<string, Stamp>();

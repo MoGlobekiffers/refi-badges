@@ -1,23 +1,36 @@
 import Image from "next/image";
 
-async function getData(searchParams: { user?: string, page?: string }) {
-  const user = searchParams.user ?? "";
-  const page = searchParams.page ?? "1";
-  const base = process.env.NEXT_PUBLIC_BASE_URL ?? "";
-  const url = (base ? `${base}` : "") + `/api/badges?` + new URLSearchParams({ user, page, limit: "20" }).toString();
+type SP = Record<string, string | string[] | undefined>;
+
+// petit helper sans `any` pour détecter un Promise
+function isPromise<T>(v: unknown): v is Promise<T> {
+  return !!v && typeof (v as { then?: unknown })["then"] === "function";
+}
+
+async function getData(sp: SP) {
+  const user = (sp.user as string | undefined) ?? "";
+  const page = (sp.page as string | undefined) ?? "1";
+  const url = "/api/badges?" + new URLSearchParams({ user, page, limit: "20" }).toString();
   const res = await fetch(url, { cache: "no-store" });
   if (!res.ok) throw new Error("Failed to fetch badges");
   return res.json();
 }
 
-export default async function BadgesPage({ searchParams }: { searchParams: { user?: string, page?: string } }) {
-  const data = await getData(searchParams);
+// Next 15: searchParams peut être un objet ou un Promise
+export default async function BadgesPage(
+  props: { searchParams?: SP | Promise<SP> }
+) {
+  const sp: SP = props.searchParams
+    ? (isPromise<SP>(props.searchParams) ? await props.searchParams : props.searchParams)
+    : {};
+
+  const data = await getData(sp);
   const items: Array<{ user_slug: string; habit_slug: string; target: number; url: string; created_at: string }> = data.items ?? [];
   const page = Number(data.page ?? 1);
   const total = Number(data.total ?? 0);
   const limit = Number(data.limit ?? 20);
   const totalPages = Math.max(1, Math.ceil(total / limit));
-  const user = searchParams.user ?? "";
+  const user = (sp.user as string | undefined) ?? "";
 
   return (
     <main style={{ padding: 24, maxWidth: 960, margin: "0 auto" }}>

@@ -19,48 +19,21 @@ export async function GET(req: Request) {
 
     return new ImageResponse(
       (
-        <div
-          style={{
-            width: 1200,
-            height: 630,
-            background: "#0f172a",
-            color: "#fff",
-            display: "flex",
-            alignItems: "stretch",
-            justifyContent: "center",
-            fontFamily: "sans-serif",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              justifyContent: "center",
-              padding: 80,
-              width: "100%",
-              height: "100%",
-            }}
-          >
+        <div style={{
+          width: 1200, height: 630, background: "#0f172a", color: "#fff",
+          display: "flex", alignItems: "stretch", justifyContent: "center",
+          fontFamily: "sans-serif",
+        }}>
+          <div style={{
+            display: "flex", flexDirection: "column", justifyContent: "center",
+            padding: 80, width: "100%", height: "100%",
+          }}>
             <div style={{ fontSize: 64, marginBottom: 40 }}>{habit}</div>
-            <div
-              style={{
-                width: 900,
-                height: 28,
-                background: "#334155",
-                borderRadius: 14,
-                overflow: "hidden",
-                display: "flex",
-                alignItems: "center",
-              }}
-            >
-              <div
-                style={{
-                  width: `${pct}%`,
-                  height: "100%",
-                  background: "#22c55e",
-                  display: "flex",
-                }}
-              />
+            <div style={{
+              width: 900, height: 28, background: "#334155",
+              borderRadius: 14, overflow: "hidden", display: "flex", alignItems: "center",
+            }}>
+              <div style={{ width: `${pct}%`, height: "100%", background: "#22c55e", display: "flex" }} />
             </div>
             <div style={{ marginTop: 40, fontSize: 36, display: "flex" }}>
               Progress: {count}/{target} ({pct}%)

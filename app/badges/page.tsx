@@ -2,11 +2,6 @@ import Image from "next/image";
 
 type SP = Record<string, string | string[] | undefined>;
 
-// petit helper sans `any` pour détecter un Promise
-function isPromise<T>(v: unknown): v is Promise<T> {
-  return !!v && typeof (v as { then?: unknown })["then"] === "function";
-}
-
 async function getData(sp: SP) {
   const user = (sp.user as string | undefined) ?? "";
   const page = (sp.page as string | undefined) ?? "1";
@@ -16,15 +11,13 @@ async function getData(sp: SP) {
   return res.json();
 }
 
-// Next 15: searchParams peut être un objet ou un Promise
+// ✅ Next 15: searchParams est (optionnel) mais typé Promise<...>
 export default async function BadgesPage(
-  props: { searchParams?: SP | Promise<SP> }
+  { searchParams }: { searchParams?: Promise<SP> }
 ) {
-  const sp: SP = props.searchParams
-    ? (isPromise<SP>(props.searchParams) ? await props.searchParams : props.searchParams)
-    : {};
-
+  const sp: SP = searchParams ? await searchParams : {};
   const data = await getData(sp);
+
   const items: Array<{ user_slug: string; habit_slug: string; target: number; url: string; created_at: string }> = data.items ?? [];
   const page = Number(data.page ?? 1);
   const total = Number(data.total ?? 0);

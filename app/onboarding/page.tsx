@@ -1,5 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
+import supabase from "@/lib/supabaseClient";
 import Link from "next/link";
 
 export default function Onboarding() {
@@ -7,28 +8,63 @@ export default function Onboarding() {
   const [target, setTarget] = useState<number>(3);
   const [saved, setSaved] = useState(false);
 
-  // Pré-remplissage si déjà enregistré
   useEffect(() => {
-    try {
-      const h = localStorage.getItem("rb_habit_name");
-      const t = localStorage.getItem("rb_week_target");
-      if (h) setHabit(h);
-      if (t) setTarget(Number(t));
-    } catch {}
+    (async () => {
+      try {
+        // 1) si user connecté, essaie de charger le profil Supabase
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const { data, error } = await supabase
+            .from("profiles")
+            .select("habit, week_target")
+            .eq("user_id", user.id)
+            .maybeSingle();
+
+          if (!error && data) {
+            if (data.habit) setHabit(data.habit);
+            if (data.week_target) setTarget(Number(data.week_target));
+            return; // on a trouvé en DB
+          }
+        }
+        // 2) sinon, fallback localStorage
+        const h = localStorage.getItem("rb_habit_name");
+        const t = localStorage.getItem("rb_week_target");
+        if (h) setHabit(h);
+        if (t) setTarget(Number(t));
+      } catch {}
+    })();
   }, []);
 
-  function save() {
+  async function save() {
     if (!habit.trim()) {
       alert("Please enter a habit (ex: Walk 20 minutes)");
       return;
     }
     if (target < 1 || target > 7) {
-      alert("Weekly target must be between 1 and 7");
+      alert("Weekly target must be between 1 and 7!");
       return;
     }
+
+    // Toujours enregistrer en local (offline OK)
     localStorage.setItem("rb_habit_name", habit.trim());
     localStorage.setItem("rb_week_target", String(target));
     setSaved(true);
+
+    // Si connecté → upsert en DB
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { error } = await supabase.from("profiles").upsert({
+          user_id: user.id,
+          habit: habit.trim(),
+          week_target: target,
+          updated_at: new Date().toISOString(),
+        });
+        if (error) console.error("profiles upsert error:", error);
+      }
+    } catch (err) {
+      console.error("save profile error:", err);
+    }
   }
 
   return (

@@ -5,12 +5,17 @@ import { slugify } from "@/lib/slugify";
 
 export const runtime = "nodejs";
 
-// --- Rate limit très simple (en mémoire) ---
+// --- Rate limit simple (en mémoire, typé) ---
 const WINDOW_MS = 60_000;
 const MAX_REQ = 10;
 type Stamp = { t: number; n: number };
-const RL = (globalThis as any).__rl || new Map<string, Stamp>();
-(globalThis as any).__rl = RL;
+
+declare global {
+  // eslint-disable-next-line no-var
+  var __rl: Map<string, Stamp> | undefined;
+}
+const RL: Map<string, Stamp> = globalThis.__rl ?? new Map<string, Stamp>();
+globalThis.__rl = RL;
 
 function tooMany(ip: string) {
   const now = Date.now();

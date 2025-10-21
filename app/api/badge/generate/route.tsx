@@ -5,6 +5,11 @@ import { slugify } from "@/lib/slugify";
 
 export const runtime = "nodejs";
 
+function errMsg(e: unknown) {
+  if (e instanceof Error) return e.message;
+  return typeof e === "string" ? e : "unknown";
+}
+
 function Badge(props: { habit: string; user: string; count: number; target: number }) {
   const { habit, user, count, target } = props;
   const progress = target > 0 ? Math.min(1, Math.max(0, count / target)) : 0;
@@ -67,11 +72,11 @@ function Badge(props: { habit: string; user: string; count: number; target: numb
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json().catch(() => ({}));
-    const habit = String(body.habit ?? "habit");
-    const user = String(body.user ?? "user");
-    const count = Number(body.count ?? 0);
-    const target = Number(body.target ?? 7);
+    const body = await req.json().catch(() => ({} as Record<string, unknown>));
+    const habit = String(body["habit"] ?? "habit");
+    const user = String(body["user"] ?? "user");
+    const count = Number(body["count"] ?? 0);
+    const target = Number(body["target"] ?? 7);
 
     if (!Number.isFinite(count) || !Number.isFinite(target)) {
       return NextResponse.json({ ok: false, error: "bad_numbers" }, { status: 400 });
@@ -103,8 +108,8 @@ export async function POST(req: Request) {
 
     const { data: pub } = supabase.storage.from(bucket).getPublicUrl(filePath);
     return NextResponse.json({ ok: true, url: pub.publicUrl, path: filePath });
-  } catch (e: any) {
+  } catch (e: unknown) {
     console.error("[/api/badge/generate] error:", e);
-    return NextResponse.json({ ok: false, error: e?.message ?? "unknown" }, { status: 500 });
+    return NextResponse.json({ ok: false, error: errMsg(e) }, { status: 500 });
   }
 }

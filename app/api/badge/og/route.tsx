@@ -1,5 +1,6 @@
 import { ImageResponse } from "next/og";
 export const runtime = "nodejs";
+export const revalidate = 60; // cache 60s par URL
 
 function errMsg(e: unknown) {
   if (e instanceof Error) return e.message;

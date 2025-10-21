@@ -1,13 +1,15 @@
 "use client";
 import { useState } from "react";
+import Image from "next/image";
 
 type Props = {
-  habit: string;   // ex: "walk 30 min"
-  user: string;    // ex: "Mo"
-  target: number;  // ex: 7
+  habit: string;
+  user: string;
+  target: number;
+  onGenerated?: (url: string) => void;
 };
 
-export default function TriggerBadge({ habit, user, target }: Props) {
+export default function TriggerBadge({ habit, user, target, onGenerated }: Props) {
   const [count, setCount] = useState(0);
   const [badgeUrl, setBadgeUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -27,6 +29,7 @@ export default function TriggerBadge({ habit, user, target }: Props) {
         const json = await res.json();
         if (json.ok) {
           setBadgeUrl(json.url);
+          onGenerated?.(json.url);
         } else {
           console.error("badge/generate error:", json);
           alert("Erreur génération badge: " + (json.error ?? "inconnue"));
@@ -53,7 +56,17 @@ export default function TriggerBadge({ habit, user, target }: Props) {
       {badgeUrl && (
         <div style={{ marginTop: 16 }}>
           <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Badge généré :</div>
-          <img src={badgeUrl} alt="Badge atteint" style={{ maxWidth: "100%", height: "auto", borderRadius: 8 }} />
+          {/* next/image */}
+          <div style={{ position: "relative", width: "100%", maxWidth: 900, aspectRatio: "1200 / 630" }}>
+            <Image
+              src={badgeUrl}
+              alt="Badge atteint"
+              fill
+              sizes="(max-width: 900px) 100vw, 900px"
+              style={{ objectFit: "cover", borderRadius: 8 }}
+              priority
+            />
+          </div>
         </div>
       )}
     </div>

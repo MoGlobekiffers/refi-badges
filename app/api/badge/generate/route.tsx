@@ -5,6 +5,29 @@ import { slugify } from "@/lib/slugify";
 
 export const runtime = "nodejs";
 
+// --- Rate limit très simple (en mémoire) ---
+const WINDOW_MS = 60_000;
+const MAX_REQ = 10;
+type Stamp = { t: number; n: number };
+const RL = (globalThis as any).__rl || new Map<string, Stamp>();
+(globalThis as any).__rl = RL;
+
+function tooMany(ip: string) {
+  const now = Date.now();
+  const s = RL.get(ip);
+  if (!s || now - s.t > WINDOW_MS) { RL.set(ip, { t: now, n: 1 }); return false; }
+  s.n += 1; s.t = now;
+  return s.n > MAX_REQ;
+}
+function clientIp(headers: Headers) {
+  return (
+    headers.get("x-forwarded-for")?.split(",")[0].trim() ||
+    headers.get("x-real-ip") ||
+    "unknown"
+  );
+}
+// --------------------------------------------
+
 function errMsg(e: unknown) {
   if (e instanceof Error) return e.message;
   return typeof e === "string" ? e : "unknown";
@@ -32,6 +55,12 @@ function Badge(props: { habit: string; user: string; count: number; target: numb
 
 export async function POST(req: Request) {
   try {
+    // rate limit
+    const ip = clientIp(req.headers);
+    if (tooMany(ip)) {
+      return NextResponse.json({ ok: false, error: "rate_limited" }, { status: 429 });
+    }
+
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     const habit = String(body["habit"] ?? "habit");
     const user = String(body["user"] ?? "user");

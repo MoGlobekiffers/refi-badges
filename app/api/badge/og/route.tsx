@@ -42,7 +42,6 @@ export async function GET(req: Request) {
             }}
           >
             <div style={{ fontSize: 64, marginBottom: 40 }}>{habit}</div>
-
             <div
               style={{
                 width: 900,
@@ -63,7 +62,6 @@ export async function GET(req: Request) {
                 }}
               />
             </div>
-
             <div style={{ marginTop: 40, fontSize: 36, display: "flex" }}>
               Progress: {count}/{target} ({pct}%)
             </div>

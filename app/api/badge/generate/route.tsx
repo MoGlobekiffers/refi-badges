@@ -72,7 +72,7 @@ function Badge(props: { habit: string; user: string; count: number; target: numb
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json().catch(() => ({} as Record<string, unknown>));
+    const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
     const habit = String(body["habit"] ?? "habit");
     const user = String(body["user"] ?? "user");
     const count = Number(body["count"] ?? 0);

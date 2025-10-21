@@ -5,9 +5,9 @@ import { slugify } from "@/lib/slugify";
 
 export const runtime = "nodejs";
 
-// --- Rate limit simple (en mémoire, typé) ---
-const WINDOW_MS = 60_000;
-const MAX_REQ = 10;
+// --- Rate limit (mémoire, typé), configurable par ENV ---
+const WINDOW_MS = Number(process.env.RATE_WINDOW_MS ?? 60_000);
+const MAX_REQ   = Number(process.env.RATE_MAX_REQ ?? 10);
 type Stamp = { t: number; n: number };
 
 declare global {
@@ -79,13 +79,17 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, error: "target_not_reached" }, { status: 400 });
     }
 
+    // Génère l'image
     const image = new ImageResponse(<Badge habit={habit} user={user} count={count} target={target} />, { width: 1200, height: 630 });
     const arrayBuffer = await image.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
+    // Upload
     const supabase = supabaseServer();
     const bucket = process.env.SUPABASE_BUCKET!;
-    const filePath = `${slugify(user) || "user"}/${slugify(habit) || "habit"}-${target}.png`;
+    const userSlug = slugify(user) || "user";
+    const habitSlug = slugify(habit) || "habit";
+    const filePath = `${userSlug}/${habitSlug}-${target}.png`;
 
     const { error: upErr } = await supabase.storage.from(bucket).upload(filePath, buffer, {
       contentType: "image/png",
@@ -94,7 +98,21 @@ export async function POST(req: Request) {
     if (upErr) return NextResponse.json({ ok: false, error: upErr.message }, { status: 500 });
 
     const { data: pub } = supabase.storage.from(bucket).getPublicUrl(filePath);
-    return NextResponse.json({ ok: true, url: pub.publicUrl, path: filePath });
+    const url = pub.publicUrl;
+
+    // 👉 Insère/enregistre en DB (idempotent via upsert-like)
+    const { error: dbErr } = await supabase
+      .from("badges")
+      .upsert(
+        { user_slug: userSlug, habit_slug: habitSlug, target, url },
+        { onConflict: "user_slug,habit_slug,target" } // dépend du plan Supabase; sinon faire SELECT puis INSERT/UPDATE
+      );
+    if (dbErr) {
+      // On n’échoue pas la génération si l’insert rate, mais on log
+      console.error("[/api/badge/generate] db upsert error:", dbErr.message);
+    }
+
+    return NextResponse.json({ ok: true, url, path: filePath });
   } catch (e: unknown) {
     console.error("[/api/badge/generate] error:", e);
     return NextResponse.json({ ok: false, error: errMsg(e) }, { status: 500 });

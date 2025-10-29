@@ -1,28 +1,56 @@
-import { supabaseAnon } from '@/lib/supabaseAnon'
+import supabase from '@/lib/supabaseAnon';
 
-export default async function UserBadges({ params }: { params: { handle: string } }) {
-  const { data: badges, error } = await supabaseAnon
+type RouteParams = { handle: string };
+
+export default async function Page({
+  params,
+}: {
+  params: Promise<RouteParams>;
+}) {
+  const { handle } = await params;
+
+  const { data, error } = await supabase
     .from('badges')
-    .select('id,title,progress,target,habit_slug,image_key,url,created_at')
-    .eq('owner_handle', params.handle)
-    .eq('public', true)
-    .order('created_at', { ascending: false })
+    .select('id, title, progress, target, public')
+    .eq('owner_handle', handle)
+    .order('created_at', { ascending: false });
 
-  if (error) return <pre>Erreur: {error.message}</pre>
-  if (!badges?.length) return <main className="p-6">Aucun badge public pour @{params.handle}</main>
+  if (error) {
+    return (
+      <main className="p-6">
+        <h1 className="text-2xl font-bold">/u/{handle}</h1>
+        <p className="text-red-400 mt-2">Erreur: {error.message}</p>
+      </main>
+    );
+  }
 
   return (
-    <main className="p-6">
-      <h1 className="text-2xl mb-4">@{params.handle} — Badges</h1>
-      <ul className="grid gap-3">
-        {badges.map(b => (
-          <li key={b.id}>
-            <a href={`/badge/${b.id}`} className="underline">
-              {b.title} ({b.progress}/{b.target})
-            </a>
-          </li>
-        ))}
+    <main className="p-6 space-y-4">
+      <h1 className="text-2xl font-bold">/u/{handle}</h1>
+      <ul className="space-y-2">
+        {(data ?? []).map((b) => {
+          const pct = Math.max(
+            0,
+            Math.min(100, Math.round((b.progress / Math.max(1, b.target)) * 100))
+          );
+          return (
+            <li key={b.id} className="p-3 rounded border border-neutral-800">
+              <a href={`/badge/${b.id}`} className="font-medium underline">
+                {b.title}
+              </a>
+              <div className="mt-2 h-2 rounded bg-neutral-800">
+                <div
+                  className="h-2 rounded bg-emerald-500"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+              <p className="text-sm text-neutral-400 mt-1">
+                {b.progress}/{b.target} — {b.public ? 'public' : 'privé'}
+              </p>
+            </li>
+          );
+        })}
       </ul>
     </main>
-  )
+  );
 }

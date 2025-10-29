@@ -1,48 +1,68 @@
-/* eslint-disable @typescript-eslint/no-explicit-any, @next/next/no-img-element */
-import { supabaseAnon } from '@/lib/supabaseAnon'
+import Image from 'next/image';
+import supabase from '@/lib/supabaseAnon';
 
-// Métadonnées OG/Twitter
-export async function generateMetadata({ params }: { params: { id: string }}) {
-  const { data: b } = await supabaseAnon
-    .from('badges')
-    .select('title')
-    .eq('id', params.id)
-    .eq('public', true)
-    .single()
+type RouteParams = { id: string };
+type Badge = {
+  id: string;
+  owner_handle: string;
+  title: string;
+  progress: number;
+  target: number;
+  public: boolean;
+  url: string | null;
+  created_at: string;
+};
 
-  const title = b ? `${b.title} | ReFi Badges` : 'ReFi Badges'
-  const og = `/badge/${params.id}/opengraph-image`
+export default async function Page({
+  params,
+}: {
+  params: Promise<RouteParams>;
+}) {
+  const { id } = await params;
 
-  return {
-    title,
-    openGraph: { title, images: [og] },
-    twitter:   { card: 'summary_large_image', title, images: [og] },
+  const { data, error } = await supabase
+    .from<Badge>('badges')
+    .select('*')
+    .eq('id', id)
+    .single();
+
+  if (error || !data) {
+    return (
+      <main className="p-6">
+        <h1 className="text-2xl font-bold">Badge introuvable</h1>
+        <p className="text-neutral-500 mt-2">{error?.message ?? '—'}</p>
+      </main>
+    );
   }
-}
 
-export default async function BadgePage({ params }: { params: { id: string } }) {
-  const { data: b, error } = await supabaseAnon
-    .from('badges')
-    .select('id,owner_handle,title,progress,target,image_key,url,created_at')
-    .eq('id', params.id)
-    .eq('public', true)
-    .single()
-
-  if (error) return <pre>Erreur: {error.message}</pre>
-  if (!b) return <main className="p-6">Badge introuvable</main>
-
-  let imageUrl = (b as any).url as string | null
-  if (!imageUrl && (b as any).image_key) {
-    const { data } = supabaseAnon.storage.from('badges').getPublicUrl((b as any).image_key)
-    imageUrl = data.publicUrl
-  }
+  const pct = Math.max(
+    0,
+    Math.min(100, Math.round((data.progress / Math.max(1, data.target)) * 100))
+  );
 
   return (
-    <main className="p-6">
-      <a href={`/u/${b.owner_handle}`} className="underline">@{b.owner_handle}</a>
-      <h1 className="text-3xl font-semibold mt-2">{b.title}</h1>
-      <p className="mt-2">Progress: {b.progress}/{b.target}</p>
-      {imageUrl && <img src={imageUrl} alt={b.title} className="mt-4 max-w-lg rounded" />}
+    <main className="min-h-[60vh] p-6 flex flex-col items-center gap-6">
+      <h1 className="text-3xl font-semibold">{data.title}</h1>
+
+      <div className="w-full max-w-2xl">
+        <div className="h-3 w-full rounded-full bg-neutral-800">
+          <div className="h-3 rounded-full bg-emerald-500" style={{ width: `${pct}%` }} />
+        </div>
+        <p className="mt-2 text-sm text-neutral-400">
+          Progress: {data.progress}/{data.target}
+        </p>
+      </div>
+
+      {data.url ? (
+        <Image
+          src={data.url}
+          alt={data.title}
+          width={800}
+          height={420}
+          className="rounded-xl border border-neutral-800"
+          priority
+        />
+      ) : null}
     </main>
-  )
+  );
 }

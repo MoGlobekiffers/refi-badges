@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @next/next/no-img-element */
 import { supabaseAnon } from '@/lib/supabaseAnon'
 
 // Métadonnées OG/Twitter

@@ -1,13 +1,19 @@
 import { ImageResponse } from "next/og";
+import { NextRequest } from "next/server";
 import { supabase } from "../../../utils/supabase";
 
 export const runtime = "edge";
 
-export async function GET(_req: Request, { params }: { params: { id: string }}) {
+export async function GET(
+  _req: NextRequest,
+  ctx: { params: Promise<{ id: string }> }
+) {
+  const { id } = await ctx.params;
+
   const { data: badge } = await supabase
     .from("badges")
     .select("id, profile_id, created_at")
-    .eq("id", params.id)
+    .eq("id", id)
     .single();
 
   if (!badge) {

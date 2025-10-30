@@ -1,10 +1,5 @@
-import TriggerBadge from "../components/TriggerBadge";
+import { redirect } from "next/navigation";
 
-export default function Page() {
-  return (
-    <main style={{ padding: 24 }}>
-      <h1 style={{ fontSize: 24, marginBottom: 16 }}>Test Badge</h1>
-      <TriggerBadge habit="walk 30 min" user="Mo" target={7} />
-    </main>
-  );
+export default function Home() {
+  redirect("/onboarding");
 }

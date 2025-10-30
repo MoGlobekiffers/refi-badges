@@ -1,70 +1,78 @@
 "use client";
-import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabaseClient";
-import WeekGrid from "@/components/WeekGrid";
 
-export default function Dashboard() {
-  const [habit, setHabit] = useState<string>("");
-  const [target, setTarget] = useState<number>(0);
-  const [loaded, setLoaded] = useState(false);
-  const [email, setEmail] = useState<string | null>(null);
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { supabase } from "../../utils/supabase";
+
+type Profile = {
+  id: string;
+  handle: string;
+  habit: string;
+  target: number;
+  progress: boolean[];
+};
+
+export default function DashboardPage() {
+  const router = useRouter();
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [progress, setProgress] = useState<boolean[]>([false,false,false,false,false,false,false]);
+  const days = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
 
   useEffect(() => {
-    // récupérer la session
-    supabase.auth.getUser().then(({ data }) => setEmail(data.user?.email ?? null));
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-      setEmail(session?.user?.email ?? null);
-    });
+    const pid = localStorage.getItem("profile_id");
+    if (!pid) { router.replace("/onboarding"); return; }
+    supabase.from("profiles").select("*").eq("id", pid).single()
+      .then(({data, error}) => {
+        if (error || !data) return;
+        setProfile(data as Profile);
+        setProgress(Array.isArray(data.progress) && data.progress.length===7 ? data.progress : [false,false,false,false,false,false,false]);
+      });
+  }, [router]);
 
-    // lire habit/target en local
-    try {
-      const h = localStorage.getItem("rb_habit_name") || "";
-      const t = Number(localStorage.getItem("rb_week_target") || 0);
-      setHabit(h);
-      setTarget(t);
-    } catch {}
-    setLoaded(true);
+  const toggle = async (i: number) => {
+    if (!profile) return;
+    const next = [...progress]; next[i] = !next[i];
+    setProgress(next);
+    const { error } = await supabase.from("profiles").update({progress: next}).eq("id", profile.id);
+    if (error) console.error(error);
+  };
 
-    return () => sub.subscription.unsubscribe();
-  }, []);
+  const finishWeek = async () => {
+    if (!profile) return;
+    const done = progress.filter(Boolean).length;
+    if (done < profile.target) { alert(`Pas encore : ${done}/${profile.target}`); return; }
+    const { error } = await supabase.from("badges").insert({ profile_id: profile.id });
+    if (error) { console.error(error); alert("Création du badge impossible"); return; }
+    const empty = [false,false,false,false,false,false,false];
+    setProgress(empty);
+    await supabase.from("profiles").update({progress: empty}).eq("id", profile.id);
+    alert("🎉 Objectif atteint : badge ajouté !");
+    router.push(`/u/${profile.handle}`);
+  };
 
-  async function logout() {
-    await supabase.auth.signOut();
-    window.location.href = "/login";
-  }
+  if (!profile) return <p className="p-4 text-center">Chargement…</p>;
 
   return (
-    <main className="p-6">
-      <p className="mb-2 text-sm opacity-70">Dashboard — 7-day grid (WIP)</p>
+    <div className="max-w-md mx-auto p-4">
+      <h1 className="text-2xl font-bold mb-2">This week</h1>
+      <p className="mb-4">Habit: <b>{profile.habit}</b> — Target: <b>{profile.target}/7</b></p>
 
-      <div className="mb-4 text-sm">
-        {email ? (
-          <div className="flex items-center gap-3">
-            <span>Signed in as <b>{email}</b></span>
-            <button onClick={logout} className="px-3 py-1 border rounded">Sign out</button>
-          </div>
-        ) : (
-          <a href="/login" className="underline text-blue-600">Sign in (magic link)</a>
-        )}
+      <div className="grid grid-cols-7 gap-2 mb-6">
+        {days.map((d,i)=>(
+          <button
+            key={i}
+            onClick={()=>toggle(i)}
+            className={`h-20 rounded text-white ${progress[i] ? "bg-emerald-500" : "bg-gray-300"}`}
+          >
+            {d}
+          </button>
+        ))}
       </div>
 
-      {!loaded ? (
-        <p>Loading…</p>
-      ) : habit ? (
-        <div className="mb-4">
-          <div className="text-xl font-semibold">This week</div>
-          <div className="opacity-80">
-            Habit: <b>{habit}</b> — Target: <b>{target}/7</b>
-          </div>
-        </div>
-      ) : (
-        <a href="/onboarding" className="underline text-blue-600 mb-4 inline-block">
-          Set your habit & weekly target →
-        </a>
-      )}
-
-      <WeekGrid />
-    </main>
+      <p className="mb-4">Progress: {progress.filter(Boolean).length}/7</p>
+      <button onClick={finishWeek} className="w-full bg-black text-white py-2 rounded">
+        Terminer la semaine
+      </button>
+    </div>
   );
 }
-

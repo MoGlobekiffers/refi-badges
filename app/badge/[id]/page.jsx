@@ -1,11 +1,10 @@
-// @ts-nocheck
 import { cookies } from "next/headers";
 import { createSupabaseServer } from "../../lib/supabase";
-import { Metadata } from "next";
 import Link from "next/link";
+
 export const revalidate = 60;
-type Props = { params: { id: string } };
-export async function generateMetadata({ params }: Props): Promise<Metadata> {
+
+export async function generateMetadata({ params }) {
   const supabase = createSupabaseServer(cookies());
   const { data: b } = await supabase.from("badges").select("title,description,image_url").eq("id", params.id).eq("is_public", true).maybeSingle();
   const title = b ? `${b.title} — RefiBadge` : "Badge introuvable";
@@ -20,7 +19,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     twitter: { card: "summary_large_image" }
   };
 }
-export default async function Page({ params }: Props) {
+
+export default async function Page({ params }) {
   const supabase = createSupabaseServer(cookies());
   const { data: b } = await supabase.from("badges").select("id,title,description,image_url, owner:owner_id (handle)").eq("id", params.id).eq("is_public", true).maybeSingle();
   if (!b) return <main className="p-6">Badge introuvable.</main>;

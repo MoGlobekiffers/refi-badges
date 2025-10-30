@@ -1,37 +1,35 @@
-import { cookies } from "next/headers";
-import { createSupabaseServer } from "../../lib/supabase";
 import Link from "next/link";
+import { createSupabaseAdmin } from "../../lib/supabaseAdmin";
 
 export const revalidate = 60;
 
-export async function generateMetadata({ params }) {
-  const supabase = createSupabaseServer(cookies());
-  const { data: profile } = await supabase.from("profiles").select("display_name").eq("handle", params.handle).maybeSingle();
-  const title = profile ? `${profile.display_name ?? "Profil"} — @${params.handle}` : "Utilisateur introuvable";
-  return {
-    title,
-    description: `Badges publics de @${params.handle}`,
-    alternates: { canonical: `/u/${params.handle}` },
-    openGraph: { title, description: `Badges publics de @${params.handle}`, url: `/u/${params.handle}`, images: [{ url: `/api/og/user?handle=${params.handle}` }] },
-    twitter: { card: "summary_large_image" }
-  };
-}
+export default async function UserPage({ params }) {
+  const supa = createSupabaseAdmin();
+  const { data: profile } = await supa
+    .from("profiles")
+    .select("id,display_name,handle")
+    .eq("handle", params.handle)
+    .maybeSingle();
 
-export default async function Page({ params }) {
-  const supabase = createSupabaseServer(cookies());
-  const [{ data: profile }, { data: badges }] = await Promise.all([
-    supabase.from("profiles").select("id,handle,display_name").eq("handle", params.handle).maybeSingle(),
-    supabase.from("badges").select("id,title,description,created_at").eq("is_public", true).order("created_at", { ascending: false })
-  ]);
   if (!profile) return <main className="p-6">Profil introuvable.</main>;
+
+  const { data: badges } = await supa
+    .from("badges")
+    .select("id,title,image_url")
+    .eq("owner_id", profile.id)
+    .eq("is_public", true)
+    .order("created_at", { ascending: false })
+    .limit(50);
+
   return (
-    <main className="max-w-4xl mx-auto p-6">
-      <h1 className="text-2xl font-semibold">@{params.handle}</h1>
-      <p className="opacity-80 mb-4">{profile.display_name}</p>
-      <ul className="grid gap-4 sm:grid-cols-2">
-        {(badges ?? []).map((b) => (
-          <li key={b.id} className="border rounded-xl p-4">
-            <Link href={`/badge/${b.id}`} className="font-medium">{b.title}</Link>
+    <main className="max-w-5xl mx-auto p-6">
+      <h1 className="text-3xl font-semibold mb-1">@{profile.handle}</h1>
+      <p className="opacity-70 mb-6">{profile.display_name}</p>
+      <ul className="grid sm:grid-cols-2 md:grid-cols-3 gap-4">
+        {(badges || []).map((b) => (
+          <li key={b.id} className="rounded-xl border p-4">
+            <div className="mb-2 font-medium">{b.title}</div>
+            <Link href={`/badge/${b.id}`} className="underline">Open</Link>
           </li>
         ))}
       </ul>

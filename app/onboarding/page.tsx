@@ -2,11 +2,19 @@
 export const dynamic = 'force-dynamic';
 export const fetchCache = 'force-no-store';
 
-import { FormEvent, useEffect, useState } from 'react';
+import { Suspense, FormEvent, useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '../../utils/supabase';
 
 export default function OnboardingPage() {
+  return (
+    <Suspense fallback={<div className="p-4 text-center">Chargement…</div>}>
+      <OnboardingInner />
+    </Suspense>
+  );
+}
+
+function OnboardingInner() {
   const router = useRouter();
   const search = useSearchParams();
   const [handle, setHandle] = useState('');

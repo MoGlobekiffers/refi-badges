@@ -1,5 +1,5 @@
 import { cookies } from "next/headers";
-import { createSupabaseServer } from "../../src/lib/supabase";
+import { createSupabaseServer } from "../../lib/supabase";
 import { Metadata } from "next";
 import Link from "next/link";
 export const revalidate = 60;

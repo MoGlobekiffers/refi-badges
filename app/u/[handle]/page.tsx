@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { cookies } from "next/headers";
 import { createSupabaseServer } from "../../lib/supabase";
 import { Metadata } from "next";

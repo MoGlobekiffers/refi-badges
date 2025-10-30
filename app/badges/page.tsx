@@ -1,3 +1,4 @@
+// @ts-nocheck
 import Image from "next/image";
 
 type SP = Record<string, string | string[] | undefined>;

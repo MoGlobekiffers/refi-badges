@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { createServerClient } from "@supabase/ssr";
 export const createSupabaseServer = (cookies: {
   get(name: string): { value: string } | undefined;

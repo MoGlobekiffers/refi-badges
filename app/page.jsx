@@ -29,6 +29,9 @@ export default function Home() {
           <a href="/u/test" className="px-4 py-2 rounded-xl border font-medium hover:bg-black/5">
             View sample profile (@test)
           </a>
+          <a href="/new" className="px-4 py-2 rounded-xl border font-medium hover:bg-black/5">
+            Create your habit
+          </a>
         </div>
       </section>
 

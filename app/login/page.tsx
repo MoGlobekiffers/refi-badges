@@ -14,21 +14,21 @@ export default function LoginPage() {
       },
     });
     if (error) alert('Erreur: ' + error.message);
-    else alert('Lien envoyé ✅ — vérifie ta boîte mail.');
+    else alert('Link sent ✅ — check your inbox.');
   };
 
   return (
     <main className="p-8 max-w-xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6">Connexion</h1>
+      <h1 className="text-3xl font-bold mb-6">Sign in</h1>
       <input
         type="email"
         value={email}
         onChange={e => setEmail(e.target.value)}
-        placeholder="votre@email.com"
+        placeholder="your@email.com"
         className="w-full border px-3 py-2 rounded mb-3"
       />
       <button onClick={sendLink} className="w-full bg-black text-white py-3 rounded">
-        Recevoir le lien
+        Get magic link
       </button>
     </main>
   );

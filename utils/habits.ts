@@ -1,23 +1,25 @@
-export type HabitItem = {
-  id: string;
-  label: string;
-  proof?: boolean; // pièce jointe recommandée
-  celo?: boolean;  // en adéquation ReFi/Celo
+// utils/habits.ts
+export type HabitOption = {
+  value: string;
+  label: string;      // affiché dans le menu
+  celo?: boolean;     // aligné avec l’écosystème Celo
+  proof?: 'recommended' | 'celo' | 'none'; // info pour l’UI (icônes)
 };
 
-export const HABITS: HabitItem[] = [
-  { id: 'walk 10 mn', label: 'Marcher 10 min' },
-  { id: 'read 10 pages', label: 'Lire 10 pages' },
-  { id: 'hydrate', label: 'Boire 1 grande bouteille d’eau' },
-  { id: 'meditate 5', label: 'Méditer 5 minutes' },
+export const HABITS: HabitOption[] = [
+  // Wellness / generic
+  { value: 'read_10_pages', label: 'Read 10 pages', proof: 'recommended' },
+  { value: 'walk_10_min', label: 'Walk 10 minutes', proof: 'recommended' },
+  { value: 'hydrate', label: 'Drink a big bottle of water', proof: 'recommended' },
 
-  { id: 'eco-transport', label: 'Prendre un transport écologique (vélo, marche, covoit.)', proof: true, celo: true },
-  { id: 'waste-recycle', label: 'Recycler / trier ses déchets (≥ X fois / semaine)', proof: true, celo: true },
-  { id: 'cleanup-action', label: 'Participer à un nettoyage (plage, parc, quartier)', proof: true, celo: true },
-  { id: 'reduce-energy', label: 'Réduire sa conso d’énergie (lumières, chauffage/clim, etc.)', proof: true, celo: true },
-  { id: 'local-food', label: 'Utiliser des produits locaux/de saison (alimentation)', proof: true, celo: true },
-  { id: 'tree-care', label: 'Planter/arroser/prendre soin de plantations existantes', proof: true, celo: true },
-  { id: 'raise-awareness', label: 'Sensibiliser une personne / publier une action éco-responsable', proof: true, celo: true },
-  { id: 'carbon-offset', label: 'Acheter/Compenser des crédits carbone (plateforme partenaire)', proof: true, celo: true },
+  // ReFi / Climate-friendly (Celo-aligned where relevant)
+  { value: 'eco_transport', label: 'Use eco transport (walk/bike/carpool) instead of a car', proof: 'recommended' },
+  { value: 'recycle_weekly', label: 'Recycle or sort waste at least X times this week', proof: 'recommended' },
+  { value: 'cleanup_action', label: 'Join a local cleanup (beach/park/neighborhood)', proof: 'recommended' },
+  { value: 'home_energy', label: 'Reduce home energy use (lights off, limit AC/heating)', proof: 'recommended' },
+  { value: 'local_food', label: 'Eat local/seasonal food', proof: 'recommended' },
+  { value: 'plant_care', label: 'Plant a tree or take care of an existing one', celo: true, proof: 'celo' },
+  { value: 'share_action', label: 'Share an eco-action to inspire others (post/social)', proof: 'recommended' },
+  { value: 'carbon_credits', label: 'Buy or offset carbon credits (partner platforms)', celo: true, proof: 'celo' },
 ];
 

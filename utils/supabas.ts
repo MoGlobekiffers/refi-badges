@@ -1,4 +1,5 @@
-// utils/supabase.ts
+'use client';
+
 import { createClient } from '@supabase/supabase-js';
 
 export const supabase = createClient(
@@ -7,8 +8,7 @@ export const supabase = createClient(
   {
     auth: {
       persistSession: true,
-      detectSessionInUrl: false, // on gère /auth/callback nous-mêmes
-      flowType: 'pkce',           // ok pour OAuth + magic link
+      autoRefreshToken: true,
     },
   }
 );

@@ -3,176 +3,226 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/utils/supabase';
-import { HABITS } from '@/utils/habits';
+
+// Petites helpers
+const fmtDate = (d: Date) => d.toISOString().slice(0, 10); // YYYY-MM-DD
+const startOfWeekMonday = (d: Date) => {
+  const x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+  const day = x.getUTCDay(); // 0=dim ... 6=sam
+  const diff = (day === 0 ? -6 : 1 - day); // on va au lundi
+  const monday = new Date(x);
+  monday.setUTCDate(x.getUTCDate() + diff);
+  monday.setUTCHours(0, 0, 0, 0);
+  return monday;
+};
 
 type Profile = {
-  id: string;
+  id: string;           // = auth.uid() (clé primaire)
+  handle: string | null;
   habit: string | null;
   target: number | null;
 };
 
-type Day = {
-  date: string;     // YYYY-MM-DD
-  label: string;    // Mon/Tue/...
-  done: boolean;
-  inFuture: boolean;
-};
-
-function startOfWeek(d: Date) {
-  const x = new Date(d);
-  const day = x.getDay(); // 0 = Sun
-  const diff = (day === 0 ? -6 : 1) - day;
-  x.setDate(x.getDate() + diff);
-  x.setHours(0, 0, 0, 0);
-  return x;
-}
-
-function fmt(d: Date) {
-  return d.toISOString().slice(0, 10);
-}
-
-export default function ChallengeAppPage() {
+export default function AppPage() {
   const router = useRouter();
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [days, setDays] = useState<Day[]>([]);
-  const [weekStart, setWeekStart] = useState<string>('');
+
   const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [checkedISO, setCheckedISO] = useState<Set<string>>(new Set()); // dates YYYY-MM-DD cochées
+  const [weekStart, setWeekStart] = useState<string>(''); // YYYY-MM-DD de ce lundi
+
+  const days = useMemo(() => ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.'], []);
+  const dayBoxes = useMemo(() => {
+    if (!weekStart) return [];
+    const base = new Date(weekStart + 'T00:00:00.000Z');
+    return Array.from({ length: 7 }).map((_, i) => {
+      const d = new Date(base);
+      d.setUTCDate(base.getUTCDate() + i);
+      return d;
+    });
+  }, [weekStart]);
 
   useEffect(() => {
     (async () => {
       setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { router.push('/login'); return; }
-
-      // profil
-      const { data: p } = await supabase
-        .from('profiles')
-        .select('id, habit, target')
-        .eq('id', user.id)
-        .maybeSingle();
-
-      if (!p) { router.push('/onboarding'); return; }
-      setProfile(p);
-
-      // semaine
-      const start = startOfWeek(new Date());
-      const ws = fmt(start);
-      setWeekStart(ws);
-
-      const arr: Day[] = [];
-      for (let i = 0; i < 7; i++) {
-        const d = new Date(start);
-        d.setDate(start.getDate() + i);
-        const today = new Date(); today.setHours(0,0,0,0);
-        arr.push({
-          date: fmt(d),
-          label: d.toLocaleDateString(undefined, { weekday: 'short' }),
-          done: false,
-          inFuture: d > today,
-        });
-      }
-
-      // progress existant
-      const { data: prog } = await supabase
-        .from('progress')
-        .select('day, done')
-        .eq('profile_id', user.id)
-        .eq('week_start', ws);
-
-      if (prog && prog.length) {
-        for (const row of prog) {
-          const idx = arr.findIndex(x => x.date === row.day);
-          if (idx >= 0) arr[idx].done = !!row.done;
+      try {
+        // 1) session
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.user) {
+          router.replace('/login');
+          return;
         }
+
+        // 2) profil
+        const { data: prof, error: profErr } = await supabase
+          .from('profiles')
+          .select('id, handle, habit, target')
+          .eq('id', session.user.id)
+          .maybeSingle();
+
+        if (profErr) throw profErr;
+
+        // Si pas de profil → onboarding
+        if (!prof) {
+          router.replace('/onboarding');
+          return;
+        }
+
+        setProfile(prof as Profile);
+
+        // 3) calcul du lundi (semaine courante)
+        const monday = startOfWeekMonday(new Date());
+        const mondayISO = fmtDate(monday);
+        setWeekStart(mondayISO);
+
+        // 4) fetch des réalisations de la semaine (on ne demande **pas** de colonne `day`)
+        const { data: rows, error: progErr } = await supabase
+          .from('progress')
+          .select('achieved_at')
+          .eq('profile_id', prof.id)
+          .eq('week_start', mondayISO);
+
+        if (progErr) throw progErr;
+
+        const set = new Set<string>();
+        (rows ?? []).forEach(r => {
+          const iso = fmtDate(new Date(r.achieved_at));
+          set.add(iso);
+        });
+        setCheckedISO(set);
+      } catch (e: any) {
+        console.error('[AppPage] load error:', e);
+        alert(`Erreur lors du chargement de ton challenge : ${e?.message ?? e}`);
+      } finally {
+        setLoading(false);
       }
-      setDays(arr);
-      setLoading(false);
     })();
   }, [router]);
 
-  const doneCount = useMemo(() => days.filter(d => d.done).length, [days]);
-  const target = profile?.target ?? 0;
+  const toggleDay = async (date: Date) => {
+    if (!profile || !weekStart) return;
 
-  const toggleDay = async (idx: number) => {
-    const d = days[idx];
-    if (d.inFuture) return; // pas de cochage futur
+    const iso = fmtDate(date);
+    const already = checkedISO.has(iso);
 
-    const newArr = [...days];
-    newArr[idx] = { ...d, done: !d.done };
-    setDays(newArr);
+    try {
+      if (already) {
+        // supprimer la ligne de ce jour (match sur date(achieved_at))
+        const { error } = await supabase
+          .from('progress')
+          .delete()
+          .eq('profile_id', profile.id)
+          .eq('week_start', weekStart)
+          .gte('achieved_at', iso + 'T00:00:00.000Z')
+          .lt('achieved_at', iso + 'T23:59:59.999Z');
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+        if (error) throw error;
 
-    const { error } = await supabase.from('progress').upsert({
-      profile_id: user.id,
-      week_start: weekStart,
-      day: d.date,
-      done: !d.done,
-    });
-    if (error) alert(`Erreur progression: ${error.message}`);
-  };
-
-  const finishWeek = async () => {
-    const reached = doneCount >= target && target > 0;
-    if (reached) {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { error } = await supabase.from('badges').insert({
-        profile_id: user.id,
-        habit: profile?.habit ?? 'habit',
-        target: target,
-        week_start: weekStart,
-        achieved_at: new Date().toISOString(),
-        kind: 'weekly-goal',
-      });
-      if (error) {
-        alert(`Erreur badge: ${error.message}`);
+        const next = new Set(checkedISO);
+        next.delete(iso);
+        setCheckedISO(next);
       } else {
-        alert('🎉 Objectif atteint : badge ajouté !');
-        // retour onboarding pour choisir une nouvelle quête
-        router.push('/onboarding');
+        // insérer une nouvelle réalisation – AUCUNE colonne `day`
+        const { error } = await supabase.from('progress').insert({
+          profile_id: profile.id,
+          week_start: weekStart,
+          habit: profile.habit ?? null,
+          target: profile.target ?? 7,
+          achieved_at: new Date().toISOString(),
+          kind: 'check', // si tu veux différencier les types
+        });
+
+        if (error) throw error;
+
+        const next = new Set(checkedISO);
+        next.add(iso);
+        setCheckedISO(next);
       }
-    } else {
-      alert(`Semaine terminée (${doneCount}/${target}).`);
-      router.push('/onboarding');
+    } catch (e: any) {
+      console.error('[AppPage] toggle error:', e);
+      alert(`Erreur progression : ${e?.message ?? e}`);
     }
   };
 
-  if (loading) return <div className="p-8">Chargement…</div>;
+  const finishWeek = async () => {
+    if (!profile) return;
+    try {
+      const done = checkedISO.size;
+      const target = profile.target ?? 7;
+
+      if (done >= target) {
+        // on crée un badge simple (si ta table badges attend profile_id + created_at…)
+        await supabase.from('badges').insert({
+          profile_id: profile.id,
+          created_at: new Date().toISOString(),
+        });
+        alert('🎉 Objectif atteint : badge ajouté !');
+        router.replace('/onboarding');
+      } else {
+        alert(`Semaine terminée (${done}/${target}).`);
+        router.replace('/onboarding');
+      }
+    } catch (e: any) {
+      console.error('[AppPage] finishWeek error:', e);
+      alert(`Erreur clôture : ${e?.message ?? e}`);
+    }
+  };
+
+  if (loading) {
+    return (
+      <main className="max-w-3xl mx-auto p-6">
+        <h1 className="text-5xl font-bold mb-4">Cette semaine</h1>
+        <p>Chargement…</p>
+      </main>
+    );
+  }
+
+  if (!profile) return null;
 
   return (
-    <main className="max-w-5xl mx-auto p-6">
-      <h1 className="text-5xl font-bold mb-4">This week</h1>
-      <p className="text-xl mb-6">
-        <span className="font-semibold">Habit</span> : {profile?.habit ?? '—'} —{' '}
-        <span className="font-semibold">Target</span> : {target}/7
-      </p>
+    <main className="max-w-3xl mx-auto p-6">
+      <h1 className="text-5xl font-bold mb-4">Cette semaine</h1>
+
+      <section className="mb-6">
+        <div className="text-xl">
+          <span className="font-semibold">Habitude</span> : {profile.habit ?? '—'} —{' '}
+          <span className="font-semibold">Objectif</span> : {profile.target ?? 7}/7
+        </div>
+      </section>
 
       <div className="flex gap-4 flex-wrap mb-6">
-        {days.map((d, i) => (
-          <button
-            key={d.date}
-            onClick={() => toggleDay(i)}
-            className={`w-28 h-36 rounded-xl border text-center flex flex-col items-center justify-center
-              ${d.done ? 'bg-green-500 text-white' : 'bg-gray-200'}
-              ${d.inFuture ? 'opacity-50 cursor-not-allowed' : ''}`}
-            disabled={d.inFuture}
-          >
-            <div className="text-lg font-semibold">{d.label}</div>
-            <div className="mt-2">{d.done ? '✅' : '—'}</div>
-          </button>
-        ))}
+        {dayBoxes.map((d, idx) => {
+          const iso = fmtDate(d);
+          const checked = checkedISO.has(iso);
+          return (
+            <button
+              key={iso}
+              onClick={() => toggleDay(d)}
+              className={`px-10 py-14 rounded-2xl border ${
+                checked ? 'bg-green-500 text-white' : 'bg-gray-200'
+              }`}
+            >
+              <div className="text-2xl font-semibold">{days[idx]}</div>
+              <div className="mt-6">{checked ? '✓' : '—'}</div>
+            </button>
+          );
+        })}
       </div>
 
-      <p className="mb-6 text-lg">Progress : {doneCount}/7</p>
+      <p className="mb-4">Progression : {checkedISO.size}/7</p>
 
       <button
         onClick={finishWeek}
-        className="w-full px-6 py-5 rounded-xl bg-black text-white text-xl"
+        className="w-full rounded-2xl bg-black text-white py-4 text-lg"
       >
         Terminer la semaine
       </button>
+
+      <div className="mt-6">
+        <a href="/onboarding" className="underline">
+          Modifier mon profil
+        </a>
+      </div>
     </main>
   );
 }

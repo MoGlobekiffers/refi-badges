@@ -1,228 +1,321 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/utils/supabase';
 
-// Petites helpers
-const fmtDate = (d: Date) => d.toISOString().slice(0, 10); // YYYY-MM-DD
-const startOfWeekMonday = (d: Date) => {
-  const x = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
-  const day = x.getUTCDay(); // 0=dim ... 6=sam
-  const diff = (day === 0 ? -6 : 1 - day); // on va au lundi
-  const monday = new Date(x);
-  monday.setUTCDate(x.getUTCDate() + diff);
-  monday.setUTCHours(0, 0, 0, 0);
-  return monday;
+type Profile = {
+  id: string;
+  habit: string;
+  target: number;
 };
 
-type Profile = {
-  id: string;           // = auth.uid() (clé primaire)
-  handle: string | null;
-  habit: string | null;
-  target: number | null;
+type ProgressRow = {
+  id: string;
+  achieved_day: string; // 'YYYY-MM-DD'
 };
+
+const DAY_LABELS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+
+// --- utils de date : semaine qui commence le lundi (en UTC) ---
+function getWeekStart(date: Date): Date {
+  const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+  const day = d.getUTCDay(); // 0=dimanche, 1=lundi...
+  const diff = (day + 6) % 7; // nb de jours depuis lundi
+  d.setUTCDate(d.getUTCDate() - diff);
+  return d;
+}
+
+function addDays(date: Date, n: number): Date {
+  const d = new Date(date);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d;
+}
+
+function toISODate(d: Date): string {
+  return d.toISOString().slice(0, 10); // 'YYYY-MM-DD'
+}
 
 export default function AppPage() {
   const router = useRouter();
 
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<Profile | null>(null);
-  const [checkedISO, setCheckedISO] = useState<Set<string>>(new Set()); // dates YYYY-MM-DD cochées
-  const [weekStart, setWeekStart] = useState<string>(''); // YYYY-MM-DD de ce lundi
+  const [days, setDays] = useState<boolean[]>(Array(7).fill(false));
 
-  const days = useMemo(() => ['lun.', 'mar.', 'mer.', 'jeu.', 'ven.', 'sam.', 'dim.'], []);
-  const dayBoxes = useMemo(() => {
-    if (!weekStart) return [];
-    const base = new Date(weekStart + 'T00:00:00.000Z');
-    return Array.from({ length: 7 }).map((_, i) => {
-      const d = new Date(base);
-      d.setUTCDate(base.getUTCDate() + i);
-      return d;
-    });
-  }, [weekStart]);
+  // nombre de jours cochés
+  const completedCount = days.filter(Boolean).length;
 
   useEffect(() => {
-    (async () => {
+    loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function loadData() {
+    try {
       setLoading(true);
-      try {
-        // 1) session
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.user) {
-          router.replace('/login');
-          return;
-        }
 
-        // 2) profil
-        const { data: prof, error: profErr } = await supabase
-          .from('profiles')
-          .select('id, handle, habit, target')
-          .eq('id', session.user.id)
-          .maybeSingle();
+      // 1) Utilisateur connecté ?
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-        if (profErr) throw profErr;
-
-        // Si pas de profil → onboarding
-        if (!prof) {
-          router.replace('/onboarding');
-          return;
-        }
-
-        setProfile(prof as Profile);
-
-        // 3) calcul du lundi (semaine courante)
-        const monday = startOfWeekMonday(new Date());
-        const mondayISO = fmtDate(monday);
-        setWeekStart(mondayISO);
-
-        // 4) fetch des réalisations de la semaine (on ne demande **pas** de colonne `day`)
-        const { data: rows, error: progErr } = await supabase
-          .from('progress')
-          .select('achieved_at')
-          .eq('profile_id', prof.id)
-          .eq('week_start', mondayISO);
-
-        if (progErr) throw progErr;
-
-        const set = new Set<string>();
-        (rows ?? []).forEach(r => {
-          const iso = fmtDate(new Date(r.achieved_at));
-          set.add(iso);
-        });
-        setCheckedISO(set);
-      } catch (e: any) {
-        console.error('[AppPage] load error:', e);
-        alert(`Erreur lors du chargement de ton challenge : ${e?.message ?? e}`);
-      } finally {
-        setLoading(false);
+      if (userError || !user) {
+        console.error('[AppPage] user error:', userError);
+        router.push('/login');
+        return;
       }
-    })();
-  }, [router]);
 
-  const toggleDay = async (date: Date) => {
-    if (!profile || !weekStart) return;
+      // 2) Profil
+      const {
+        data: profileData,
+        error: profileError,
+      } = await supabase
+        .from('profiles')
+        .select('id, habit, target')
+        .eq('id', user.id)
+        .single();
 
-    const iso = fmtDate(date);
-    const already = checkedISO.has(iso);
+      if (profileError || !profileData) {
+        console.error('[AppPage] profile error:', profileError);
+        router.push('/onboarding');
+        return;
+      }
+
+      const safeProfile: Profile = {
+        id: profileData.id,
+        habit: profileData.habit ?? 'My habit',
+        target: profileData.target ?? 1,
+      };
+      setProfile(safeProfile);
+
+      // 3) Progression de la semaine courante
+      const now = new Date();
+      const weekStart = getWeekStart(now);
+      const nextWeekStart = addDays(weekStart, 7);
+      const weekStartISO = toISODate(weekStart);
+      const nextWeekStartISO = toISODate(nextWeekStart);
+
+      const {
+        data: progressRows,
+        error: progressError,
+      } = await supabase
+        .from('progress')
+        .select('id, achieved_day')
+        .eq('profile_id', safeProfile.id)
+        .gte('achieved_day', weekStartISO)
+        .lt('achieved_day', nextWeekStartISO);
+
+      if (progressError) {
+        console.error('[AppPage] progress load error:', progressError);
+        alert(
+          `Progress load error: ${
+            (progressError as any)?.message ?? JSON.stringify(progressError)
+          }`,
+        );
+        setDays(Array(7).fill(false));
+        return;
+      }
+
+      const newDays = Array(7).fill(false) as boolean[];
+
+      if (progressRows && progressRows.length > 0) {
+        for (const row of progressRows as ProgressRow[]) {
+          if (!row.achieved_day) continue;
+
+          const d = new Date(row.achieved_day + 'T00:00:00Z');
+          const diffDays = Math.round(
+            (d.getTime() - weekStart.getTime()) / (24 * 60 * 60 * 1000),
+          );
+
+          if (diffDays >= 0 && diffDays < 7) {
+            newDays[diffDays] = true;
+          }
+        }
+      }
+
+      setDays(newDays);
+    } catch (e) {
+      console.error('[AppPage] load error:', e);
+      alert(`Error while loading your challenge: ${(e as any)?.message ?? e}`);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // toggle d’un jour
+  async function toggleDay(index: number) {
+    if (!profile) return;
+
+    const today = new Date();
+    const weekStart = getWeekStart(today);
+    const weekStartISO = toISODate(weekStart);
+    const dayDate = addDays(weekStart, index);
+    const dayISO = toISODate(dayDate);
+
+    // Optimistic UI
+    let newValue: boolean;
+    setDays((prev) => {
+      const copy = [...prev];
+      copy[index] = !copy[index];
+      newValue = copy[index];
+      return copy;
+    });
 
     try {
-      if (already) {
-        // supprimer la ligne de ce jour (match sur date(achieved_at))
+      if (newValue!) {
+        // on coche -> insert
+        const { error } = await supabase.from('progress').insert({
+          profile_id: profile.id,
+          week_start: weekStartISO,
+          achieved_day: dayISO,
+        });
+
+        if (error) {
+          console.error('[AppPage] toggle insert error:', error);
+          alert(
+            `Progress error: ${
+              (error as any).message ?? JSON.stringify(error)
+            }`,
+          );
+          // revert
+          setDays((prev) => {
+            const copy = [...prev];
+            copy[index] = !copy[index];
+            return copy;
+          });
+        }
+      } else {
+        // on décoche -> delete
         const { error } = await supabase
           .from('progress')
           .delete()
           .eq('profile_id', profile.id)
-          .eq('week_start', weekStart)
-          .gte('achieved_at', iso + 'T00:00:00.000Z')
-          .lt('achieved_at', iso + 'T23:59:59.999Z');
+          .eq('achieved_day', dayISO);
 
-        if (error) throw error;
-
-        const next = new Set(checkedISO);
-        next.delete(iso);
-        setCheckedISO(next);
-      } else {
-        // insérer une nouvelle réalisation – AUCUNE colonne `day`
-        const { error } = await supabase.from('progress').insert({
-          profile_id: profile.id,
-          week_start: weekStart,
-          habit: profile.habit ?? null,
-          target: profile.target ?? 7,
-          achieved_at: new Date().toISOString(),
-          kind: 'check', // si tu veux différencier les types
-        });
-
-        if (error) throw error;
-
-        const next = new Set(checkedISO);
-        next.add(iso);
-        setCheckedISO(next);
+        if (error) {
+          console.error('[AppPage] toggle delete error:', error);
+          alert(
+            `Progress error: ${
+              (error as any).message ?? JSON.stringify(error)
+            }`,
+          );
+          // revert
+          setDays((prev) => {
+            const copy = [...prev];
+            copy[index] = !copy[index];
+            return copy;
+          });
+        }
       }
-    } catch (e: any) {
-      console.error('[AppPage] toggle error:', e);
-      alert(`Erreur progression : ${e?.message ?? e}`);
+    } catch (e) {
+      console.error('[AppPage] toggle unexpected error:', e);
+      alert(`Unexpected progress error: ${(e as any)?.message ?? e}`);
+      // revert
+      setDays((prev) => {
+        const copy = [...prev];
+        copy[index] = !copy[index];
+        return copy;
+      });
     }
-  };
+  }
 
-  const finishWeek = async () => {
+  // bouton "Finish the week"
+  async function handleFinishWeek() {
     if (!profile) return;
-    try {
-      const done = checkedISO.size;
-      const target = profile.target ?? 7;
 
-      if (done >= target) {
-        // on crée un badge simple (si ta table badges attend profile_id + created_at…)
-        await supabase.from('badges').insert({
-          profile_id: profile.id,
-          created_at: new Date().toISOString(),
-        });
-        alert('🎉 Objectif atteint : badge ajouté !');
-        router.replace('/onboarding');
-      } else {
-        alert(`Semaine terminée (${done}/${target}).`);
-        router.replace('/onboarding');
-      }
-    } catch (e: any) {
-      console.error('[AppPage] finishWeek error:', e);
-      alert(`Erreur clôture : ${e?.message ?? e}`);
+    if (completedCount < profile.target) {
+      alert(
+        `You planned ${profile.target} day(s) but you only completed ${completedCount}.`,
+      );
+      return;
     }
-  };
 
-  if (loading) {
+    try {
+      // 1) badge
+      const { error: badgeError } = await supabase.from('badges').insert({
+        profile_id: profile.id,
+        title: `Weekly goal reached`,
+      });
+
+      if (badgeError) {
+        console.error('[AppPage] badge insert error:', badgeError);
+        alert(
+          `Badge error: ${
+            (badgeError as any).message ?? JSON.stringify(badgeError)
+          }`,
+        );
+        return;
+      }
+
+      alert('🎉 Goal reached: badge added!');
+
+      // 2) on envoie l’utilisateur sur /onboarding pour choisir une nouvelle quête
+      //    et on ne touche pas aux données ici (le reset se fait dans /onboarding)
+      router.push('/onboarding');
+    } catch (e) {
+      console.error('[AppPage] finish week error:', e);
+      alert(`Error while finishing the week: ${(e as any)?.message ?? e}`);
+    }
+  }
+
+  if (loading || !profile) {
     return (
-      <main className="max-w-3xl mx-auto p-6">
-        <h1 className="text-5xl font-bold mb-4">Cette semaine</h1>
-        <p>Chargement…</p>
+      <main className="min-h-screen flex items-center justify-center">
+        <p>Loading…</p>
       </main>
     );
   }
 
-  if (!profile) return null;
-
   return (
-    <main className="max-w-3xl mx-auto p-6">
-      <h1 className="text-5xl font-bold mb-4">Cette semaine</h1>
+    <main className="min-h-screen flex flex-col items-center px-4 py-8">
+      <section className="w-full max-w-5xl">
+        <header className="mb-8">
+          <h1 className="text-4xl font-bold mb-2">This week</h1>
+          <p className="text-lg">
+            <span className="font-semibold">Habit:</span> {profile.habit} —{' '}
+            <span className="font-semibold">Goal:</span> {profile.target}/7
+          </p>
+        </header>
 
-      <section className="mb-6">
-        <div className="text-xl">
-          <span className="font-semibold">Habitude</span> : {profile.habit ?? '—'} —{' '}
-          <span className="font-semibold">Objectif</span> : {profile.target ?? 7}/7
-        </div>
+        <section className="mb-6 flex gap-4 overflow-x-auto">
+          {DAY_LABELS.map((label, index) => {
+            const active = days[index];
+            return (
+              <button
+                key={label}
+                onClick={() => toggleDay(index)}
+                className={[
+                  'flex flex-col items-center justify-center rounded-2xl w-28 h-40 border text-lg font-semibold',
+                  active
+                    ? 'bg-green-500 text-white border-green-500'
+                    : 'bg-gray-50 text-gray-900 border-gray-200 hover:border-gray-400',
+                ].join(' ')}
+              >
+                <span className="mb-4">{label}</span>
+                <span className="text-2xl">{active ? '✓' : '–'}</span>
+              </button>
+            );
+          })}
+        </section>
+
+        <p className="mb-6 text-lg font-semibold">
+          Progress: {completedCount}/{profile.target}
+        </p>
+
+        <button
+          onClick={handleFinishWeek}
+          className="w-full max-w-3xl block mx-auto mb-6 rounded-full py-4 px-6 text-center text-white text-lg font-semibold bg-black hover:bg-gray-900"
+        >
+          Finish the week
+        </button>
+
+        <Link href="/onboarding" className="underline text-sm">
+          Edit my profile
+        </Link>
       </section>
-
-      <div className="flex gap-4 flex-wrap mb-6">
-        {dayBoxes.map((d, idx) => {
-          const iso = fmtDate(d);
-          const checked = checkedISO.has(iso);
-          return (
-            <button
-              key={iso}
-              onClick={() => toggleDay(d)}
-              className={`px-10 py-14 rounded-2xl border ${
-                checked ? 'bg-green-500 text-white' : 'bg-gray-200'
-              }`}
-            >
-              <div className="text-2xl font-semibold">{days[idx]}</div>
-              <div className="mt-6">{checked ? '✓' : '—'}</div>
-            </button>
-          );
-        })}
-      </div>
-
-      <p className="mb-4">Progression : {checkedISO.size}/7</p>
-
-      <button
-        onClick={finishWeek}
-        className="w-full rounded-2xl bg-black text-white py-4 text-lg"
-      >
-        Terminer la semaine
-      </button>
-
-      <div className="mt-6">
-        <a href="/onboarding" className="underline">
-          Modifier mon profil
-        </a>
-      </div>
     </main>
   );
 }

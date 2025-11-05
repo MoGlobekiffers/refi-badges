@@ -3,149 +3,273 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/utils/supabase';
-import { HABITS } from '@/utils/habits';
-import SignOutButton from '@/components/SignOutButton';
 
-type Profile = {
-  id: string;
-  handle: string | null;
-  habit: string | null;
-  target: number | null;
-};
+const HABITS = [
+  'Walk 10 min',
+  'Meditate 5 min',
+  'Stretch 5 min',
+  'Drink 1L of water',
+  'Read 5 pages',
+  'Journal 5 min',
+  'Cold shower',
+  'No sugar for a day',
+  'Sleep before 23:00',
+  'Gratitude: 3 things',
+  'Learn 10 words',
+  'Practice a language',
+  'Do 10 push-ups',
+  'No social media evening',
+  'Tidy up 10 min',
+];
+
+function getWeekStart(date: Date): string {
+  const d = new Date(date);
+  const day = d.getDay(); // 0 (Sun) - 6 (Sat)
+  const diff = (day === 0 ? -6 : 1) - day; // Monday as first day
+  d.setDate(d.getDate() + diff);
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString().slice(0, 10); // YYYY-MM-DD
+}
 
 export default function OnboardingPage() {
   const router = useRouter();
-  const [profile, setProfile] = useState<Profile | null>(null);
+
   const [handle, setHandle] = useState('');
-  const [habit, setHabit] = useState(HABITS[0]?.id ?? '');
-  const [target, setTarget] = useState<number>(5);
+  const [habit, setHabit] = useState<string>(HABITS[0]);
+  const [target, setTarget] = useState<number>(1);
+
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    (async () => {
-      setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        router.push('/login');
-        return;
-      }
+    async function loadProfile() {
+      try {
+        setLoading(true);
 
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, handle, habit, target')
-        .eq('id', user.id)
-        .maybeSingle();
+        // 1) Logged-in user
+        const {
+          data: { user },
+          error: userError,
+        } = await supabase.auth.getUser();
 
-      if (error) console.error(error);
-      if (data) {
-        setProfile(data);
-        setHandle(data.handle ?? '');
-        if (data.habit) setHabit(data.habit);
-        if (data.target) setTarget(data.target);
+        if (userError || !user) {
+          console.error('[Onboarding] user load error:', userError);
+          router.push('/login');
+          return;
+        }
+
+        // 2) Existing profile
+        const {
+          data: profileData,
+          error: profileError,
+        } = await supabase
+          .from('profiles')
+          .select('id, handle, habit, target')
+          .eq('id', user.id)
+          .maybeSingle();
+
+        if (profileError) {
+          console.error('[Onboarding] profile load error:', profileError);
+          alert(`Error while loading your profile: ${profileError.message}`);
+          return;
+        }
+
+        if (profileData) {
+          setHandle(profileData.handle ?? '');
+          if (profileData.habit && HABITS.includes(profileData.habit)) {
+            setHabit(profileData.habit);
+          }
+          if (profileData.target && profileData.target >= 1 && profileData.target <= 7) {
+            setTarget(profileData.target);
+          }
+        }
+      } catch (e: any) {
+        console.error('[Onboarding] loadProfile unexpected error:', e);
+        alert(`Unexpected error while loading your profile: ${e?.message ?? e}`);
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
-    })();
+    }
+
+    loadProfile();
   }, [router]);
 
-  const saveProfile = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+  const handleSave = async () => {
+    try {
+      setSaving(true);
 
-    const upsert = {
-      id: user.id,
-      handle: handle || null,
-      habit: habit || null,
-      target: target ?? 0,
-    };
+      // 1) User
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
 
-    const { error } = await supabase.from('profiles').upsert(upsert);
-    if (error) {
-      alert(`Erreur profil: ${error.message}`);
-      return;
+      if (userError || !user) {
+        throw userError ?? new Error('You are not logged in.');
+      }
+
+      // 2) Upsert profile
+      const {
+        data: profile,
+        error: upsertError,
+      } = await supabase
+        .from('profiles')
+        .upsert(
+          {
+            id: user.id,
+            handle: handle.trim() || null,
+            habit,
+            target,
+          },
+          { onConflict: 'id' }
+        )
+        .select('id')
+        .single();
+
+      if (upsertError) {
+        console.error('[Onboarding] profile upsert error:', upsertError);
+        throw upsertError;
+      }
+
+      // 3) Reset ONLY this week’s progress
+      const today = new Date();
+      const weekStart = getWeekStart(today);
+
+      const { error: deleteError } = await supabase
+        .from('progress')
+        .delete()
+        .eq('profile_id', profile.id)
+        .eq('week_start', weekStart);
+
+      if (deleteError) {
+        console.error('[Onboarding] progress reset error:', deleteError);
+        throw deleteError;
+      }
+
+      alert('Profile saved and this week has been reset ✅');
+    } catch (e: any) {
+      alert(`Error while saving your profile: ${e?.message ?? e}`);
+    } finally {
+      setSaving(false);
     }
-    alert('Profil enregistré ✅');
   };
 
-  const goToChallenge = () => router.push('/app');
+  const handleGoToDashboard = () => {
+    router.push('/app');
+  };
 
-  if (loading) return <div className="p-8">Chargement…</div>;
+  const handleSignOut = async () => {
+    try {
+      setSaving(true);
+      const { error } = await supabase.auth.signOut();
+      if (error) {
+        console.error('[Onboarding] sign-out error:', error);
+        throw error;
+      }
+      router.push('/login');
+    } catch (e: any) {
+      alert(`Sign-out error: ${e?.message ?? e}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <main className="min-h-screen flex items-center justify-center">
+        <p className="text-lg">Loading your profile...</p>
+      </main>
+    );
+  }
 
   return (
-  <main className="max-w-3xl mx-auto p-6">
-    <div className="flex items-center justify-between mb-6">
-      <h1 className="text-4xl font-bold">Onboarding</h1>
-      <SignOutButton />
-    </div>
-
-
-      {/* Bloc challenge en cours */}
-      <section className="mb-8 rounded-xl border p-4 bg-white">
-        <h2 className="text-xl font-semibold mb-2">Mon challenge</h2>
-        <p className="text-sm text-gray-600 mb-4">
-          Ton profil est complet. Tu peux rejoindre ton challenge.
-        </p>
+    <main className="min-h-screen flex flex-col items-center px-4 py-8 bg-gray-50">
+      {/* Top-right Sign out */}
+      <div className="w-full max-w-2xl flex justify-end mb-4">
         <button
-          onClick={goToChallenge}
-          className="px-5 py-4 rounded-xl bg-black text-white"
+          type="button"
+          onClick={handleSignOut}
+          disabled={saving}
+          className="px-4 py-2 rounded-full border border-gray-300 text-sm font-semibold bg-white hover:bg-gray-100 disabled:opacity-60"
         >
-          Mon challenge en cours
+          {saving ? 'Please wait…' : 'Sign out'}
         </button>
-      </section>
+      </div>
 
-      {/* Formulaire profil */}
-      <section className="rounded-xl border p-4 bg-white">
-        <h3 className="text-lg font-semibold mb-4">Configurer le profil</h3>
+      <section className="w-full max-w-2xl bg-white rounded-3xl shadow-md p-8">
+        <h1 className="text-3xl font-bold mb-6 text-center">Onboarding</h1>
 
-        <label className="block mb-2 text-sm font-medium">Pseudonyme (handle)</label>
-        <input
-          className="w-full mb-4 rounded-lg border p-3"
-          value={handle}
-          onChange={(e) => setHandle(e.target.value)}
-          placeholder="ton pseudo"
-        />
+        <div className="space-y-6">
+          {/* Handle */}
+          <div>
+            <label className="block mb-2 text-sm font-medium">
+              Public name (handle)
+            </label>
+            <input
+              type="text"
+              value={handle}
+              onChange={(e) => setHandle(e.target.value)}
+              className="w-full border border-gray-300 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-black"
+              placeholder="Ex: mo"
+            />
+          </div>
 
-        <label className="block mb-2 text-sm font-medium">Habitude / Quête</label>
-        <select
-          className="w-full mb-4 rounded-lg border p-3"
-          value={habit}
-          onChange={(e) => setHabit(e.target.value)}
-        >
-          {HABITS.map(h => (
-            <option key={h.id} value={h.id}>
-              {h.label}{h.celo ? ' · celo' : ''}{h.proof ? ' · 📎' : ''}
-            </option>
-          ))}
-        </select>
+          {/* Habit / challenge */}
+          <div>
+            <label className="block mb-2 text-sm font-medium">
+              Habit / challenge
+            </label>
+            <select
+              value={habit}
+              onChange={(e) => setHabit(e.target.value)}
+              className="w-full border border-gray-300 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-black"
+            >
+              {HABITS.map((h) => (
+                <option key={h} value={h}>
+                  {h}
+                </option>
+              ))}
+            </select>
+          </div>
 
-        <label className="block mb-2 text-sm font-medium">Objectif / semaine</label>
-        <input
-          type="number"
-          className="w-full mb-6 rounded-lg border p-3"
-          value={target}
-          min={1}
-          max={7}
-          onChange={(e) => setTarget(Number(e.target.value))}
-        />
+          {/* Weekly goal */}
+          <div>
+            <label className="block mb-2 text-sm font-medium">
+              Weekly goal (1–7)
+            </label>
+            <select
+              value={target}
+              onChange={(e) => setTarget(Number(e.target.value))}
+              className="w-full border border-gray-300 rounded-xl px-3 py-2 focus:outline-none focus:ring-2 focus:ring-black"
+            >
+              {Array.from({ length: 7 }, (_, i) => i + 1).map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </div>
 
-        <div className="flex gap-3 flex-wrap">
-          <button
-            onClick={saveProfile}
-            className="px-5 py-4 rounded-xl bg-black text-white"
-          >
-            Enregistrer
-          </button>
-          <button
-            onClick={() => router.push('/app')}
-            className="px-5 py-4 rounded-xl bg-gray-100"
-          >
-            Voir /app
-          </button>
+          {/* Buttons */}
+          <div className="flex flex-col sm:flex-row gap-3 pt-4">
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={saving}
+              className="flex-1 bg-black text-white rounded-full py-3 font-semibold hover:bg-gray-900 disabled:opacity-60"
+            >
+              {saving ? 'Saving…' : 'Save'}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleGoToDashboard}
+              className="flex-1 border border-gray-300 bg-white rounded-full py-3 font-semibold hover:bg-gray-100"
+            >
+              Go to dashboard
+            </button>
+          </div>
         </div>
-
-        <p className="mt-4 text-sm text-gray-500">
-          📎 = preuve recommandée (photo, capture, reçu). &nbsp;•&nbsp;
-          🟡 celo = aligné avec l’écosystème Celo / futur mint de badge.
-        </p>
       </section>
     </main>
   );

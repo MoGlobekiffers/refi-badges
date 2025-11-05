@@ -1,24 +1,71 @@
 "use server";
 
-export async function incrementAndMaybeGenerate({
-  habit, user, currentCount, target,
-}: { habit: string; user: string; currentCount: number; target: number }) {
+import { cookies } from "next/headers";
+import { createServerClient } from "@supabase/ssr";
 
-  const newCount = currentCount + 1;
+function getServerClient() {
+  const cookieStore = cookies();
 
-  // TODO: ici, update ta DB avec newCount
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value;
+        },
+      },
+    }
+  );
+}
 
-  let badgeUrl: string | null = null;
-  if (newCount >= target) {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000"}/api/badge/generate`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ habit, user, count: newCount, target }),
-      cache: "no-store",
-    });
-    const json = await res.json();
-    if (json.ok) badgeUrl = json.url;
+type FinishWeekParams = {
+  profileId: string;
+  habit: string;
+  target: number;
+  weekStartISO: string; // "YYYY-MM-DD" du lundi de la semaine courante
+};
+
+/**
+ * Crée un badge puis supprime toutes les réalisations de la semaine
+ * pour ce profile. Appelée depuis la page /app.
+ */
+export async function finishWeek({
+  profileId,
+  habit,
+  target,
+  weekStartISO,
+}: FinishWeekParams) {
+  const supabase = getServerClient();
+
+  // 1) Créer le badge
+  const { error: badgeError } = await supabase.from("badges").insert({
+    profile_id: profileId,
+    habit,
+    target,
+    achieved_at: new Date().toISOString(),
+  });
+
+  if (badgeError) {
+    throw badgeError;
   }
 
-  return { newCount, badgeUrl };
+  // 2) Supprimer toutes les réalisations de la semaine courante
+  const weekStart = new Date(weekStartISO + "T00:00:00.000Z");
+  const weekEnd = new Date(weekStart);
+  weekEnd.setUTCDate(weekEnd.getUTCDate() + 7);
+
+  const { error: deleteError } = await supabase
+    .from("progress")
+    .delete()
+    .eq("profile_id", profileId)
+    .gte("achieved_at", weekStart.toISOString())
+    .lt("achieved_at", weekEnd.toISOString());
+
+  if (deleteError) {
+    throw deleteError;
+  }
+
+  return { ok: true };
 }
+

@@ -1,30 +1,31 @@
 'use client';
 
-import { useRouter } from 'next/navigation';
-import { supabase } from '@/utils/supabase';
+import { useState } from 'react';
 
 export default function SignOutButton() {
-  const router = useRouter();
+  const [loading, setLoading] = useState(false);
 
-  const handleSignOut = async () => {
+  const onSignOut = async () => {
     try {
-      // Déconnexion Supabase
-      await supabase.auth.signOut();
-      // Redirection vers la page de login
-      router.replace('/login');
+      setLoading(true);
+      const res = await fetch('/auth/logout', { method: 'POST' });
+      if (!res.ok) throw new Error('Logout failed');
+      window.location.href = '/';
     } catch (e) {
-      console.error(e);
-      alert("Impossible de se déconnecter pour le moment.");
+      alert(`Sign-out error: ${e instanceof Error ? e.message : e}`);
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
     <button
-      onClick={handleSignOut}
-      className="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 text-sm font-medium"
-      aria-label="Se déconnecter"
+      onClick={onSignOut}
+      className="px-4 py-2 rounded-xl bg-gray-200 hover:bg-gray-300 text-gray-900"
+      aria-label="Sign out"
+      title="Sign out"
     >
-      Se déconnecter
+      {loading ? 'Signing out…' : 'Sign out'}
     </button>
   );
 }

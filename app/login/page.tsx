@@ -1,34 +1,59 @@
 'use client';
+
 import { useState } from 'react';
 import { supabase } from '@/utils/supabase';
 
 export default function LoginPage() {
   const [email, setEmail] = useState('');
+  const [sending, setSending] = useState(false);
 
   const sendLink = async () => {
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        // doit matcher EXACTEMENT l’URL de redirection configurée côté Supabase
-        emailRedirectTo: 'http://localhost:3000/auth/callback',
-      },
-    });
-    if (error) alert('Erreur: ' + error.message);
-    else alert('Lien envoyé ✅ — vérifie ta boîte mail.');
+    try {
+      const clean = email.trim();
+      if (!clean) {
+        alert('Please enter your email.');
+        return;
+      }
+
+      setSending(true);
+
+      const { error } = await supabase.auth.signInWithOtp({
+        email: clean,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth/callback`,
+        },
+      });
+
+      if (error) throw error;
+
+      alert('Magic link sent ✅ — please check your inbox.');
+    } catch (e) {
+      console.error('[Login] error:', e);
+      alert(`Login error: ${(e as any)?.message ?? e}`);
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
-    <main className="p-8 max-w-xl mx-auto">
-      <h1 className="text-3xl font-bold mb-6">Connexion</h1>
+    <main className="max-w-md mx-auto p-6">
+      <h1 className="text-2xl font-bold mb-6">Login</h1>
+
+      <label className="block text-sm font-medium mb-1">Email</label>
       <input
         type="email"
         value={email}
-        onChange={e => setEmail(e.target.value)}
-        placeholder="votre@email.com"
-        className="w-full border px-3 py-2 rounded mb-3"
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="you@example.com"
+        className="w-full mb-4 rounded border px-3 py-2"
       />
-      <button onClick={sendLink} className="w-full bg-black text-white py-3 rounded">
-        Recevoir le lien
+
+      <button
+        onClick={sendLink}
+        disabled={sending}
+        className="w-full rounded bg-black text-white px-4 py-2 disabled:opacity-60"
+      >
+        {sending ? 'Sending magic link…' : 'Send magic link'}
       </button>
     </main>
   );

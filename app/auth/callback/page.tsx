@@ -4,7 +4,9 @@ import { useEffect, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/utils/supabase';
 
-export default function AuthCallback() {
+import { Suspense } from 'react';
+
+function AuthCallbackContent() {
   const router = useRouter();
   const search = useSearchParams();
   const [msg, setMsg] = useState('Connexion en cours…');
@@ -14,11 +16,14 @@ export default function AuthCallback() {
       try {
         // Cas A : MAGIC LINK (token dans le fragment #access_token=…)
         if (typeof window !== 'undefined' && window.location.hash.includes('access_token')) {
-          const { error } = await supabase.auth.getSessionFromUrl({ storeSession: true });
+          // Supabase v2 detects session automatically from URL
+          const { data, error } = await supabase.auth.getSession();
           if (error) throw error;
-          setMsg('Connecté ✅');
-          router.replace('/onboarding');
-          return;
+          if (data.session) {
+            setMsg('Connecté ✅');
+            router.replace('/onboarding');
+            return;
+          }
         }
 
         // Cas B : OAuth PKCE (?code=…)
@@ -54,3 +59,10 @@ export default function AuthCallback() {
   );
 }
 
+export default function AuthCallback() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <AuthCallbackContent />
+    </Suspense>
+  );
+}

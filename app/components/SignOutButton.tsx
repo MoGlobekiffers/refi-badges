@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { LogOut } from 'lucide-react';
-import supabase from '@/utils/supabase';
+import { supabase } from '@/utils/supabase';
 import { useState } from 'react';
 
 export default function SignOutButton() {
@@ -17,7 +17,7 @@ export default function SignOutButton() {
       // (optionnel) purge du storage si tu utilises persistSession
       try {
         localStorage.removeItem('sb-:session');
-      } catch {}
+      } catch { }
       // Redirection vers /login
       router.push('/login');
     } catch (e) {

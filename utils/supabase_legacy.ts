@@ -7,8 +7,8 @@ export const supabase = createClient(
   {
     auth: {
       persistSession: true,
-      detectSessionInUrl: false, // on gère /auth/callback nous-mêmes
-      flowType: 'pkce',           // ok pour OAuth + magic link
+      detectSessionInUrl: true,  // Let Supabase handle the hash parsing
+      flowType: 'implicit',      // Bypass PKCE verifier issues
     },
   }
 );

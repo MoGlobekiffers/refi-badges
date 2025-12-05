@@ -1,14 +1,15 @@
 import { ImageResponse } from "next/og";
-import { NextRequest } from "next/server";
-import { supabase } from "../../../utils/supabase";
+import { NextResponse } from 'next/server';
+import { createClient } from '@/utils/supabase/server';
 
 export const runtime = "edge";
 
 export async function GET(
-  _req: NextRequest,
-  ctx: { params: Promise<{ id: string }> }
+  request: Request,
+  { params }: { params: { id: string } }
 ) {
-  const { id } = await ctx.params;
+  const supabase = await createClient();
+  const { id } = params;
 
   const { data: badge } = await supabase
     .from("badges")

@@ -2,10 +2,11 @@
 
 import { useRouter } from 'next/navigation';
 import { LogOut } from 'lucide-react';
-import { supabase } from '@/utils/supabase';
+import { createClient } from '@/utils/supabase/client';
 import { useState } from 'react';
 
 export default function SignOutButton() {
+  const supabase = createClient();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
 
@@ -21,7 +22,7 @@ export default function SignOutButton() {
       // Redirection vers /login
       router.push('/login');
     } catch (e) {
-      alert("Impossible de se déconnecter. Réessaie.");
+      console.error("Sign out error", e);
       setLoading(false);
     }
   };

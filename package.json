@@ -23,7 +23,7 @@
     "@types/react-dom": "^19.2.2",
     "autoprefixer": "10.4.20",
     "dotenv": "^17.2.3",
-    "hardhat": "^3.0.17",
+    "hardhat": "^2.26.0",
     "postcss": "8.4.35",
     "tailwindcss": "3.4.13",
     "typescript": "^5.9.3"
